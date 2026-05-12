@@ -1,0 +1,20 @@
+.DS_Store
+
+.cache_ebird/
+.cache_ebird_test/
+.cache_ebird_smoke/
+.cache_ebird_test_verify/
+.cache_avilist.pkl.gz
+
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# local virtualenv (see README)
+birds_python/
+.venv/
+venv/
+
+# optional: keep large/binary data out of git (uncomment if desired)
+# AviList-v2025-11Jun-extended.xlsx
+# RWY_ebird_world_life_list.csv

@@ -1,0 +1,14 @@
+pandas>=2.2
+openpyxl>=3.1
+numpy>=1.26
+matplotlib>=3.8
+seaborn>=0.13
+plotly>=5.22
+scipy>=1.13
+networkx>=3.3
+jupyter>=1.0
+ipykernel>=6.29
+nbformat>=5.10
+dendropy>=4.6
+biopython>=1.83
+requests>=2.31
