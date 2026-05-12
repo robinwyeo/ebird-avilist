@@ -1,4 +1,4 @@
-"""Helpers for `avilist_birds_explore.ipynb` / `RWY_life_list_explore.ipynb`: range keywords, labels, IO."""
+"""Helpers for `notebooks/avilist_birds_explore.ipynb` / `notebooks/RWY_life_list_explore.ipynb`: range keywords, labels, IO."""
 from __future__ import annotations
 
 import json
@@ -6,6 +6,23 @@ import re
 from pathlib import Path
 
 import pandas as pd
+
+
+def repo_root() -> Path:
+    """Directory containing ``requirements.txt`` (repository root)."""
+    pkg_dir = Path(__file__).resolve().parent
+    for cand in (pkg_dir, pkg_dir.parent, *pkg_dir.parents):
+        if (cand / "requirements.txt").exists():
+            return cand
+    return pkg_dir.parent
+
+
+def data_dir() -> Path:
+    """Spreadsheets, reference tables, caches, and ``phylogeny/`` assets."""
+    root = repo_root()
+    d = root / "data"
+    return d if d.is_dir() else root
+
 
 ORDER_ENGLISH: dict[str, str] = {
     "Accipitriformes": "Hawks, eagles & relatives",
@@ -167,8 +184,10 @@ KEYWORD_PAT = re.compile(
 
 
 def _load_country_keywords() -> dict[str, list[str]]:
-    """ISO-3166 alpha-3 → [canonical English name, …aliases]. Data: `birds_country_table.tsv`."""
-    path = Path(__file__).with_name("birds_country_table.tsv")
+    """ISO-3166 alpha-3 → [canonical English name, …aliases]. Data: `data/birds_country_table.tsv`."""
+    path = data_dir() / "birds_country_table.tsv"
+    if not path.exists():
+        path = Path(__file__).with_name("birds_country_table.tsv")
     if not path.exists():
         return {}
     out: dict[str, list[str]] = {}

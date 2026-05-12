@@ -6,6 +6,12 @@
 .cache_ebird_test_verify/
 .cache_avilist.pkl.gz
 
+data/.cache_ebird/
+data/.cache_ebird_test/
+data/.cache_ebird_smoke/
+data/.cache_ebird_test_verify/
+data/.cache_avilist.pkl.gz
+
 __pycache__/
 *.py[cod]
 .ipynb_checkpoints/

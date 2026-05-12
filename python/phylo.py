@@ -9,11 +9,14 @@ Workflow
   from phylo import (build_order_tree, build_family_tree,
                      build_family_subtrees, load_family_subtrees_inline,
                      display_phylocanvas, phylocanvas_html)
-  ord_nwk, ord_meta = build_order_tree(df_species, DATA_DIR / "phylogeny")
-  fam_nwk, fam_meta = build_family_tree(df_species, DATA_DIR / "phylogeny")
+  from birds_nb import data_dir
+
+  PHYLO_DIR = data_dir() / "phylogeny"
+  ord_nwk, ord_meta = build_order_tree(df_species, PHYLO_DIR)
+  fam_nwk, fam_meta = build_family_tree(df_species, PHYLO_DIR)
   # One-time build of per-family species subtrees (slow, cached after first run):
-  build_family_subtrees(df_species, DATA_DIR / "phylogeny")
-  subtrees = load_family_subtrees_inline(DATA_DIR / "phylogeny")
+  build_family_subtrees(df_species, PHYLO_DIR)
+  subtrees = load_family_subtrees_inline(PHYLO_DIR)
   # Notebook (inline data — all subtrees bundled in the srcdoc):
   display_phylocanvas(fam_nwk, fam_meta, "avilist-fam-tree", height=760,
                       drilldown=True, subtrees_inline=subtrees)
