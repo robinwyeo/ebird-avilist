@@ -46,7 +46,21 @@ Select the **Python (birds_python)** kernel from the Kernel menu, then Run All.
 
 ## Publish on robinwyeo.github.io
 
-The Jekyll site repo [robinwyeo.github.io](https://github.com/robinwyeo/robinwyeo.github.io) contains `scripts/nbconvert_avilist_postprocess.py`, which reads **this** clone and writes `_data_science/2026-03-01-ebird-avilist.md` plus assets. The post body is wrapped in `{% raw %}` so Plotly/Liquid braces are safe; that also hides the first in-body image from the archive layout, so the script sets **`header.teaser`** in YAML (same mechanism as a visible index thumbnail on [`/data-science/`](https://robinwyeo.github.io/data-science/)). Keep the teaser art at **`assets/data-science/avilist/AviList-title-image.png`** in this repo; the site script copies it into `images/data-science/avilist/` when you run the pipeline.
+The Jekyll site repo [robinwyeo.github.io](https://github.com/robinwyeo/robinwyeo.github.io) contains `scripts/nbconvert_avilist_postprocess.py`, which reads **this** clone and writes `_data_science/2026-03-01-ebird-avilist.md` plus assets under `assets/` and `images/`.
+
+**Liquid and the post body.** The generated markdown body is wrapped in `{% raw %}…{% endraw %}` so Plotly and other embedded HTML/JS are not interpreted as Liquid.
+
+**Thumbnail on [`/data-science/`](https://robinwyeo.github.io/data-science/).** On this AcademicPages setup, the collection index builds each card’s excerpt from the **first markdown block after the YAML front matter** (the same pattern as your other posts that start with `![…](…)`). It does **not** use `header.teaser` for that listing row. The postprocess script therefore emits the title figure as a normal markdown image **between** the closing `---` and the opening `{% raw %}`, and still sets **`header.teaser`** in YAML for themes or layouts that read it elsewhere.
+
+**Source art in this repo.** Keep the file at **`assets/data-science/avilist/AviList-title-image.png`**. The script copies it to **`images/data-science/avilist/AviList-title-image.png`** on the site when you run the pipeline.
+
+**Jekyll title, date, and tags** come from the **first markdown cell** of `notebooks/avilist_birds_explore.ipynb` (the script does not keep a separate hard-coded title). Use this pattern at the top of that cell so the generated `_data_science/2026-03-01-ebird-avilist.md` stays in sync:
+
+- One line **`# Your post title`** — becomes YAML `title:` (quotes added when needed) and remains the in-notebook H1.
+- A line **`## Date: YYYY-MM-DD`** — ISO date only; becomes YAML `date:`. Other formats are ignored with a warning and the default date is used.
+- A **`tags:`** block using YAML-style list lines **`  - tag-name`** — becomes Jekyll `tags:`.
+
+`permalink` (`/data-science/ebird-avilist/`) and `header.teaser` stay fixed in the script. **Save the notebook to disk** before running the postprocess command so it reads your latest title, date, and tags.
 
 1. Clone [robinwyeo.github.io](https://github.com/robinwyeo/robinwyeo.github.io) and this repo as **siblings** (same parent folder), e.g. `Github/robinwyeo.github.io` and `Github/ebird-avilist`.
 2. From the **website** repo:
@@ -62,7 +76,7 @@ The Jekyll site repo [robinwyeo.github.io](https://github.com/robinwyeo/robinwye
    EBIRD_AVILIST_ROOT=/path/to/ebird-avilist python scripts/nbconvert_avilist_postprocess.py
    ```
 
-3. YAML front matter for the collection (title, date, `permalink`, tags, **`header.teaser`**) is applied by that script; use `md-only` to re-patch the markdown without re-running nbconvert when you only adjust post-processing.
+3. The script builds YAML from that lead cell (plus fixed `permalink` / teaser), runs nbconvert output through MathJax/phylo/Plotly fixes, wraps the body in `{% raw %}`, and moves the title image before the raw block for the index thumbnail. Use **`python scripts/nbconvert_avilist_postprocess.py md-only`** to re-run post-processing on the existing `.md` without re-running nbconvert. The log line `YAML from notebook lead cell` shows what was picked up.
 4. Commit the generated `.md`, images, and `assets/` updates in **robinwyeo.github.io** only; keep notebooks and source data in **ebird-avilist**.
 
 ## Stages
