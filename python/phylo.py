@@ -867,6 +867,8 @@ def _phylocanvas_js_source(
     subtrees_inline: dict[str, dict] | None = None,
     subtrees_url_base: str | None = None,
     species_tree_type: str = "rectangular",
+    external_nwk_url: str | None = None,
+    external_meta_url: str | None = None,
 ) -> str:
     """JavaScript IIFE: load Phylocanvas.gl (CDN) and draw into *container_id*.
 
@@ -874,6 +876,11 @@ def _phylocanvas_js_source(
     species-level cladogram for that family.  Data is loaded either from the
     bundled *subtrees_inline* dict (notebook) or via ``fetch()`` from
     *subtrees_url_base* (static page).
+
+    When *external_nwk_url* and *external_meta_url* are both supplied, the
+    Newick and meta JSON are **not** inlined as JS literals; instead the IIFE
+    fetches them at runtime via ``Promise.all([fetch(...), fetch(...)])``.
+    This keeps the generated script small enough for Jekyll to build quickly.
     """
     tt_js    = _TREE_TYPE_MAP.get(tree_type, "Circular")
     sp_tt_js = _TREE_TYPE_MAP.get(species_tree_type, "Rectangular")
@@ -909,7 +916,7 @@ def _phylocanvas_js_source(
     fs_rows = _family_search_rows(meta) if drilldown else []
     fs_j = json.dumps(fs_rows, ensure_ascii=False, separators=(",", ":"))
 
-    return f"""(function () {{
+    js = f"""(function () {{
   var CONTAINER_ID = {cid_j};
   var NEWICK       = {nwk_j};
   var META         = {meta_j};
@@ -1733,6 +1740,47 @@ def _phylocanvas_js_source(
   }}
 }})();"""
 
+    # External-data mode: strip the inline NEWICK/META literals and replace
+    # the synchronous bootstrap with a Promise.all(fetch(...)) bootstrap so
+    # that the Jekyll page receives a compact <script> block.
+    if external_nwk_url is not None and external_meta_url is not None:
+        nwk_url_j  = json.dumps(external_nwk_url)
+        meta_url_j = json.dumps(external_meta_url)
+
+        # Remove the large inline literals — replace with uninitialized vars.
+        js = js.replace(f"var NEWICK       = {nwk_j};\n", "var NEWICK;\n", 1)
+        js = js.replace(f"var META         = {meta_j};\n", "var META;\n", 1)
+
+        # Swap out the synchronous readyState bootstrap for a fetch bootstrap.
+        old_boot = (
+            '  if (document.readyState === "loading") {\n'
+            '    document.addEventListener("DOMContentLoaded", loadAndRender, { once: true });\n'
+            '  } else {\n'
+            '    setTimeout(loadAndRender, 0);\n'
+            '  }\n'
+            '})();'
+        )
+        new_boot = (
+            "  Promise.all([\n"
+            f"    fetch({nwk_url_j}).then(function(r){{return r.text();}}),\n"
+            f"    fetch({meta_url_j}).then(function(r){{return r.json();}})\n"
+            "  ]).then(function(res){\n"
+            "    NEWICK = res[0];\n"
+            "    META   = res[1];\n"
+            '    if (document.readyState === "loading") {\n'
+            '      document.addEventListener("DOMContentLoaded", loadAndRender, { once: true });\n'
+            "    } else {\n"
+            "      setTimeout(loadAndRender, 0);\n"
+            "    }\n"
+            "  }).catch(function(err){\n"
+            '    console.error("[phylo] Failed to load tree data:", err);\n'
+            "  });\n"
+            "})();"
+        )
+        js = js.replace(old_boot, new_boot, 1)
+
+    return js
+
 
 def _build_iframe_srcdoc(
     newick: str,
@@ -1866,6 +1914,8 @@ def phylocanvas_html(
     subtrees_inline: dict[str, dict] | None = None,
     subtrees_url_base: str | None = None,
     species_tree_type: str = "rectangular",
+    external_nwk_url: str | None = None,
+    external_meta_url: str | None = None,
 ) -> str:
     """Return self-contained HTML + inline ``<script>`` for Phylocanvas.gl.
 
@@ -1893,6 +1943,12 @@ def phylocanvas_html(
         Base URL for per-family JSON files served from the static site.
     species_tree_type : str
         Phylocanvas tree type for the species-level cladogram ("rectangular").
+    external_nwk_url : str, optional
+        If provided together with *external_meta_url*, the Newick string is
+        **not** inlined; the browser fetches it from this URL at render time.
+        Keeps the Jekyll markdown small (the Newick can be several MB).
+    external_meta_url : str, optional
+        URL for the meta JSON file; used together with *external_nwk_url*.
     """
     legend = _build_legend(meta)
     bar    = _phylocanvas_bar_div(container_id, len(meta)) if drilldown else ""
@@ -1905,6 +1961,8 @@ def phylocanvas_html(
         subtrees_inline=subtrees_inline,
         subtrees_url_base=subtrees_url_base,
         species_tree_type=species_tree_type,
+        external_nwk_url=external_nwk_url,
+        external_meta_url=external_meta_url,
     )
     return (
         f'<div style="font-family:sans-serif;">'
