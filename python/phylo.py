@@ -1569,7 +1569,9 @@ def _phylocanvas_js_source(
   function containerWidth(el) {{
     var w = el.clientWidth || el.offsetWidth || 0;
     if (w < 32) w = el.getBoundingClientRect().width || 0;
-    return Math.max(w, 560);
+    if (w < 32) w = window.innerWidth || 0;
+    // Match iframe min-width (display_phylocanvas): avoid forcing 560px when the embed is narrow.
+    return Math.max(w, 280);
   }}
 
   // Wait until the container has a non-zero width before constructing the
@@ -1578,6 +1580,11 @@ def _phylocanvas_js_source(
   function whenSized(el, cb, tries) {{
     tries = tries || 0;
     var w = el.clientWidth || el.offsetWidth || 0;
+    // srcdoc / nested iframes sometimes report 0 width until layout; use inner window as floor.
+    if (w < 32) {{
+      var iw = window.innerWidth || 0;
+      if (iw >= 32) w = Math.min(Math.max(400, iw - 24), 920);
+    }}
     if (w >= 32) {{ cb(w); return; }}
     if (tries > 60) {{ cb(containerWidth(el)); return; }}
     requestAnimationFrame(function () {{ whenSized(el, cb, tries + 1); }});
@@ -1677,6 +1684,11 @@ def _phylocanvas_js_source(
           return;
         }}
       }}
+      // Family search UI only needs the DOM (same pattern as the choropleth picker); bind before
+      // Phylocanvas loads so focus/type suggestions work even if WebGL init is delayed.
+      if (DRILLDOWN) {{
+        _bindFamilySearch();
+      }}
       if (!window.phylocanvas || !window.phylocanvas.PhylocanvasGL) {{
         console.error("[phylo] Phylocanvas.gl not loaded");
         return;
@@ -1695,7 +1707,6 @@ def _phylocanvas_js_source(
           if (backEl) {{
             backEl.addEventListener("click", function () {{ _enterFamilyTree(); }});
           }}
-          _bindFamilySearch();
           _resizePathOverlay();
         }}
       }});
@@ -1901,8 +1912,8 @@ def display_phylocanvas(
         quote=True,
     )
     iframe = (
-        f'<iframe srcdoc="{srcdoc}" sandbox="allow-scripts" scrolling="no" '
-        f'style="width:100%;min-width:560px;height:{iframe_height}px;border:none;'
+        f'<iframe srcdoc="{srcdoc}" sandbox="allow-scripts allow-same-origin" scrolling="no" '
+        f'style="width:100%;min-width:280px;height:{iframe_height}px;border:none;'
         f'border-radius:8px;border:1px solid #d0d7de;background:{_TREE_VIEW_BG_CSS};'
         f'display:block;"></iframe>'
     )
@@ -1990,7 +2001,7 @@ def phylocanvas_html(
     iframe = (
         "<!-- phylocanvas-static-embed -->\n"
         f'<iframe srcdoc="{srcdoc}" sandbox="{sandbox}" scrolling="no" '
-        f'style="width:100%;min-width:560px;height:{iframe_height}px;border:none;'
+        f'style="width:100%;min-width:280px;height:{iframe_height}px;border:none;'
         f'border-radius:8px;border:1px solid #d0d7de;background:{_TREE_VIEW_BG_CSS};'
         f'display:block;"></iframe>'
     )

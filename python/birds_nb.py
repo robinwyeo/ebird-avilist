@@ -417,7 +417,7 @@ def collapse_sunburst_genera_by_family(
     return pd.concat(parts, ignore_index=True)
 
 
-def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 900, height: int = 900) -> str:
+def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 560, height: int = 560) -> str:
     """Wrap a Plotly ``pio.to_html(..., div_id=gd_id)`` fragment in a viewport with wheel zoom and left-drag pan.
 
     Plotly's built-in ``scrollZoom`` / ``dragmode='pan'`` do not apply reliably to sunburst traces; this outer
@@ -517,11 +517,13 @@ def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 900, heigh
 """.replace(
         "___GDID_JS___", gid_js
     )
+    # Square viewport capped by vmin so the full sunburst fits without page scroll on typical viewports.
     return (
         '<div class="sunburst-panzoom-root" style="width:100%;display:flex;justify-content:center;'
-        'align-items:center;box-sizing:border-box">'
-        f'<div id="{gd_id}-vp" style="width:{width}px;height:{height}px;max-width:100%;overflow:hidden;'
-        f'position:relative;cursor:grab;flex:0 0 auto;box-sizing:border-box">'
+        'align-items:center;box-sizing:border-box;padding:6px 0">'
+        f'<div id="{gd_id}-vp" style="width:min({width}px,92vmin);height:min({height}px,92vmin);'
+        f"max-width:100%;aspect-ratio:1;overflow:hidden;position:relative;cursor:grab;"
+        f'flex:0 0 auto;box-sizing:border-box;margin:0 auto">'
         f'<div id="{gd_id}-pz" style="width:100%;height:100%;transform-origin:0 0">'
         f"{fig_html}</div><script>{js}</script></div></div>"
     )
