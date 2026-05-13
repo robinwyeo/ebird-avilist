@@ -60,6 +60,8 @@ The Jekyll site repo [robinwyeo.github.io](https://github.com/robinwyeo/robinwye
 - A line **`## Date: YYYY-MM-DD`** — ISO date only; becomes YAML `date:`. Other formats are ignored with a warning and the default date is used.
 - A **`tags:`** block using YAML-style list lines **`  - tag-name`** — becomes Jekyll `tags:`.
 
+The title teaser `![…](/images/data-science/avilist/AviList-title-image.png)` may appear **after** the date and tags in the cell; the postprocess script still emits one copy **before** `{% raw %}` so the listing thumbnail stays correct.
+
 `permalink` (`/data-science/ebird-avilist/`) and `header.teaser` stay fixed in the script. **Save the notebook to disk** before running the postprocess command so it reads your latest title, date, and tags.
 
 1. Clone [robinwyeo.github.io](https://github.com/robinwyeo/robinwyeo.github.io) and this repo as **siblings** (same parent folder), e.g. `Github/robinwyeo.github.io` and `Github/ebird-avilist`.
