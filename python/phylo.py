@@ -1791,7 +1791,77 @@ def _phylocanvas_js_source(
         )
         js = js.replace(old_boot, new_boot, 1)
 
+    # Jekyll's compress_html layout collapses all whitespace (including
+    # newlines) outside <pre> tags, even inside <iframe srcdoc="…">. That turns
+    # any ``// line comment`` into a sink that swallows the rest of the script.
+    # Strip line comments here so the embedded JS survives that compression
+    # step; block comments are also dropped to keep the payload compact.
+    js = _strip_js_comments(js)
+
     return js
+
+
+def _strip_js_comments(js: str) -> str:
+    """Remove ``//`` line comments and ``/* */`` block comments from JS source.
+
+    Required because the Jekyll ``compress_html`` layout collapses newlines
+    inside ``<iframe srcdoc="…">`` blocks, which would otherwise turn each
+    ``//`` comment into a single-line comment that swallows the rest of the
+    minified script. Tracks single-quote, double-quote, and template-literal
+    string contexts so that ``//`` and ``/*`` inside string literals (e.g.
+    ``"https://…"``) are preserved verbatim.
+    """
+    out: list[str] = []
+    i = 0
+    n = len(js)
+    in_single = False
+    in_double = False
+    in_template = False
+    while i < n:
+        c = js[i]
+        if in_single or in_double or in_template:
+            out.append(c)
+            if c == "\\" and i + 1 < n:
+                out.append(js[i + 1])
+                i += 2
+                continue
+            if in_single and c == "'":
+                in_single = False
+            elif in_double and c == '"':
+                in_double = False
+            elif in_template and c == "`":
+                in_template = False
+            i += 1
+            continue
+        if c == "'":
+            in_single = True
+            out.append(c)
+            i += 1
+            continue
+        if c == '"':
+            in_double = True
+            out.append(c)
+            i += 1
+            continue
+        if c == "`":
+            in_template = True
+            out.append(c)
+            i += 1
+            continue
+        if c == "/" and i + 1 < n and js[i + 1] == "/":
+            eol = js.find("\n", i)
+            if eol == -1:
+                i = n
+            else:
+                i = eol
+            continue
+        if c == "/" and i + 1 < n and js[i + 1] == "*":
+            end = js.find("*/", i + 2)
+            i = (end + 2) if end != -1 else n
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
 
 
 def _build_iframe_srcdoc(
@@ -1830,7 +1900,7 @@ def _build_iframe_srcdoc(
         "font-family:sans-serif;overflow:hidden;}"
         if not drilldown else
         f"html,body{{margin:0;padding:0;background:{_TREE_VIEW_BG_CSS};"
-        "font-family:sans-serif;}}"
+        "font-family:sans-serif;}"
     )
     return (
         '<!DOCTYPE html><html><head><meta charset="utf-8">'

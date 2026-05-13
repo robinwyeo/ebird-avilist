@@ -52,7 +52,7 @@ The Jekyll site repo [robinwyeo.github.io](https://github.com/robinwyeo/robinwye
 
 **Thumbnail on [`/data-science/`](https://robinwyeo.github.io/data-science/).** On this AcademicPages setup, the collection index builds each card’s excerpt from the **first markdown block after the YAML front matter** (the same pattern as your other posts that start with `![…](…)`). It does **not** use `header.teaser` for that listing row. The postprocess script therefore emits the title figure as a normal markdown image **between** the closing `---` and the opening `{% raw %}`, and still sets **`header.teaser`** in YAML for themes or layouts that read it elsewhere.
 
-**Source art in this repo.** Keep the file at **`assets/data-science/avilist/AviList-title-image.png`**. The script copies it to **`images/data-science/avilist/AviList-title-image.png`** on the site when you run the pipeline.
+**Source art in this repo.** Keep the file at **`assets/data-science/avilist/title.png`**. The script copies it to **`images/data-science/avilist/title.png`** on the site when you run the pipeline.
 
 **Jekyll title, date, and tags** come from the **first markdown cell** of `notebooks/avilist_birds_explore.ipynb` (the script does not keep a separate hard-coded title). Use this pattern at the top of that cell so the generated `_data_science/2026-03-01-ebird-avilist.md` stays in sync:
 
@@ -60,7 +60,7 @@ The Jekyll site repo [robinwyeo.github.io](https://github.com/robinwyeo/robinwye
 - A line **`## Date: YYYY-MM-DD`** — ISO date only; becomes YAML `date:`. Other formats are ignored with a warning and the default date is used.
 - A **`tags:`** block using YAML-style list lines **`  - tag-name`** — becomes Jekyll `tags:`.
 
-The title teaser `![…](/images/data-science/avilist/AviList-title-image.png)` may appear **after** the date and tags in the cell; the postprocess script still emits one copy **before** `{% raw %}` so the listing thumbnail stays correct.
+The title teaser `![…](/images/data-science/avilist/title.png)` may appear **after** the date and tags in the cell; the postprocess script still emits one copy **before** `{% raw %}` so the listing thumbnail stays correct.
 
 `permalink` (`/data-science/ebird-avilist/`) and `header.teaser` stay fixed in the script. **Save the notebook to disk** before running the postprocess command so it reads your latest title, date, and tags.
 
