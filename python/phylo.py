@@ -20,7 +20,8 @@ Workflow
   # Notebook (inline data — all subtrees bundled in the srcdoc):
   display_phylocanvas(fam_nwk, fam_meta, "avilist-fam-tree", height=760,
                       drilldown=True, subtrees_inline=subtrees)
-  # Static Jekyll page (per-family JSON fetched on click):
+  # Static Jekyll page (same iframe+srcdoc pattern as the notebook; per-family
+  # JSON fetched on click from the site):
   html = phylocanvas_html(fam_nwk, fam_meta, "avilist-fam-tree", height=760,
                           drilldown=True,
                           subtrees_url_base="/assets/data-science/avilist/phylogeny/subtrees/")
@@ -1794,6 +1795,8 @@ def _build_iframe_srcdoc(
     subtrees_inline: dict[str, dict] | None = None,
     subtrees_url_base: str | None = None,
     species_tree_type: str = "rectangular",
+    external_nwk_url: str | None = None,
+    external_meta_url: str | None = None,
 ) -> str:
     """Self-contained HTML document containing canvas + Phylocanvas.gl + render JS."""
     bar    = _phylocanvas_bar_div(container_id, len(meta)) if drilldown else ""
@@ -1806,6 +1809,8 @@ def _build_iframe_srcdoc(
         subtrees_inline=subtrees_inline,
         subtrees_url_base=subtrees_url_base,
         species_tree_type=species_tree_type,
+        external_nwk_url=external_nwk_url,
+        external_meta_url=external_meta_url,
     )
     # Drilldown bar needs natural height above the fixed-height canvas; only
     # the canvas itself clips to overflow:hidden.
@@ -1890,6 +1895,8 @@ def display_phylocanvas(
             subtrees_inline=subtrees_inline,
             subtrees_url_base=subtrees_url_base,
             species_tree_type=species_tree_type,
+            external_nwk_url=None,
+            external_meta_url=None,
         ),
         quote=True,
     )
@@ -1917,12 +1924,16 @@ def phylocanvas_html(
     external_nwk_url: str | None = None,
     external_meta_url: str | None = None,
 ) -> str:
-    """Return self-contained HTML + inline ``<script>`` for Phylocanvas.gl.
+    """Return legend + sandboxed ``<iframe srcdoc=…>`` for Phylocanvas.gl (static sites).
 
-    Use this for **static pages** (e.g. Jekyll) and nbconvert post-processing
-    where inline scripts execute normally. In **VS Code Jupyter**, prefer
-    :func:`display_phylocanvas` — it embeds everything in an iframe to dodge
-    that environment's per-output sandboxing.
+    Uses the **same** iframe + ``srcdoc`` pattern as :func:`display_phylocanvas`
+    so the tree, bar, search UI, CDN bundle, and boot script share one document.
+    That avoids Jekyll / theme pipelines that drop or reorder inline ``<script>``
+    tags in the post body (which would leave an empty white canvas area).
+
+    When the embed must ``fetch()`` same-site assets (drilldown JSON and/or
+    *external_nwk_url* / *external_meta_url*), the iframe is sandboxed with
+    ``allow-scripts allow-same-origin`` so those requests stay first-party.
 
     Parameters
     ----------
@@ -1950,27 +1961,40 @@ def phylocanvas_html(
     external_meta_url : str, optional
         URL for the meta JSON file; used together with *external_nwk_url*.
     """
+    from html import escape as _esc
+
     legend = _build_legend(meta)
-    bar    = _phylocanvas_bar_div(container_id, len(meta)) if drilldown else ""
-    search = _phylocanvas_family_search_div(container_id) if drilldown else ""
-    canvas = _phylocanvas_canvas_div(container_id, height, drilldown=drilldown)
-    js     = _phylocanvas_js_source(
-        container_id, newick, meta, height, tree_type,
-        family_hover=family_hover,
-        drilldown=drilldown,
-        subtrees_inline=subtrees_inline,
-        subtrees_url_base=subtrees_url_base,
-        species_tree_type=species_tree_type,
-        external_nwk_url=external_nwk_url,
-        external_meta_url=external_meta_url,
+    iframe_height = height + (225 if drilldown else 0)
+    needs_same_origin = bool(
+        (external_nwk_url and external_meta_url)
+        or (drilldown and subtrees_url_base)
     )
-    return (
-        f'<div style="font-family:sans-serif;">'
-        f'{legend}{bar}{search}{canvas}'
-        f'</div>\n'
-        f'<script src="{_PHYLOCANVAS_CDN}"></script>\n'
-        f'<script>\n{js}\n</script>'
+    sandbox = (
+        "allow-scripts allow-same-origin"
+        if needs_same_origin else
+        "allow-scripts"
     )
+    srcdoc = _esc(
+        _build_iframe_srcdoc(
+            newick, meta, container_id, height, tree_type,
+            family_hover=family_hover,
+            drilldown=drilldown,
+            subtrees_inline=subtrees_inline,
+            subtrees_url_base=subtrees_url_base,
+            species_tree_type=species_tree_type,
+            external_nwk_url=external_nwk_url,
+            external_meta_url=external_meta_url,
+        ),
+        quote=True,
+    )
+    iframe = (
+        "<!-- phylocanvas-static-embed -->\n"
+        f'<iframe srcdoc="{srcdoc}" sandbox="{sandbox}" scrolling="no" '
+        f'style="width:100%;min-width:560px;height:{iframe_height}px;border:none;'
+        f'border-radius:8px;border:1px solid #d0d7de;background:{_TREE_VIEW_BG_CSS};'
+        f'display:block;"></iframe>'
+    )
+    return f'<div style="font-family:sans-serif;">{legend}{iframe}</div>\n'
 
 
 def save_static_png(

@@ -46,10 +46,10 @@ Select the **Python (birds_python)** kernel from the Kernel menu, then Run All.
 
 ## Publish on robinwyeo.github.io
 
-The website repo contains `scripts/nbconvert_avilist_postprocess.py`, which reads **this** clone and writes `_data_science/ebird-avilist.md` plus assets under `assets/data-science/avilist/` and `images/data-science/avilist/`. If that script hard-codes the notebook filename, point it at `notebooks/avilist_birds_explore.ipynb` after this layout change.
+The Jekyll site repo [robinwyeo.github.io](https://github.com/robinwyeo/robinwyeo.github.io) contains `scripts/nbconvert_avilist_postprocess.py`, which reads **this** clone and writes `_data_science/2026-03-01-ebird-avilist.md` plus assets. The post body is wrapped in `{% raw %}` so Plotly/Liquid braces are safe; that also hides the first in-body image from the archive layout, so the script sets **`header.teaser`** in YAML (same mechanism as a visible index thumbnail on [`/data-science/`](https://robinwyeo.github.io/data-science/)). Keep the teaser art at **`assets/data-science/avilist/AviList-title-image.png`** in this repo; the site script copies it into `images/data-science/avilist/` when you run the pipeline.
 
 1. Clone [robinwyeo.github.io](https://github.com/robinwyeo/robinwyeo.github.io) and this repo as **siblings** (same parent folder), e.g. `Github/robinwyeo.github.io` and `Github/ebird-avilist`.
-2. From the website repo:
+2. From the **website** repo:
 
    ```bash
    cd /path/to/robinwyeo.github.io
@@ -62,7 +62,7 @@ The website repo contains `scripts/nbconvert_avilist_postprocess.py`, which read
    EBIRD_AVILIST_ROOT=/path/to/ebird-avilist python scripts/nbconvert_avilist_postprocess.py
    ```
 
-3. Add YAML front matter to `_data_science/ebird-avilist.md` if nbconvert did not emit it (title, date, `permalink`, tags) so the page appears on `/data-science/` like your other articles.
+3. YAML front matter for the collection (title, date, `permalink`, tags, **`header.teaser`**) is applied by that script; use `md-only` to re-patch the markdown without re-running nbconvert when you only adjust post-processing.
 4. Commit the generated `.md`, images, and `assets/` updates in **robinwyeo.github.io** only; keep notebooks and source data in **ebird-avilist**.
 
 ## Stages

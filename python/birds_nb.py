@@ -367,6 +367,56 @@ def mentioned_islands(text: object) -> list[str]:
     return sorted({g for g in ISLAND_GROUPS if re.search(re.escape(g), text, re.IGNORECASE)})
 
 
+def collapse_sunburst_genera_by_family(
+    df: pd.DataFrame,
+    *,
+    order_col: str = "Order",
+    family_col: str = "Family",
+    genus_col: str = "Genus",
+    value_col: str = "n_species",
+    max_genera_per_family: int = 40,
+    other_genus_label: str = "Other genera",
+    extra_sum_cols: tuple[str, ...] = (),
+) -> pd.DataFrame:
+    """Within each (order, family), keep the largest genera by ``value_col`` and merge the rest.
+
+    Plotly renders one SVG path per sunburst sector; capping genera per family cuts DOM size and
+    makes clicks/hover much lighter while preserving exact species counts in aggregated buckets.
+    """
+    keys = (order_col, family_col)
+    for k in (*keys, genus_col, value_col):
+        if k not in df.columns:
+            raise ValueError(f"collapse_sunburst_genera_by_family: missing column {k!r}")
+    for c in extra_sum_cols:
+        if c not in df.columns:
+            raise ValueError(f"collapse_sunburst_genera_by_family: extra_sum_cols references missing {c!r}")
+    parts: list[pd.DataFrame] = []
+    for _, g in df.groupby(list(keys), sort=False):
+        g_sorted = g.sort_values(value_col, ascending=False, kind="stable")
+        if len(g_sorted) <= max_genera_per_family:
+            parts.append(g_sorted)
+            continue
+        head = g_sorted.iloc[:max_genera_per_family]
+        tail = g_sorted.iloc[max_genera_per_family:]
+        row = head.iloc[0].to_dict()
+        row[genus_col] = other_genus_label
+        row[value_col] = tail[value_col].sum()
+        for c in extra_sum_cols:
+            row[c] = tail[c].sum()
+        if "Genus_common_example" in row:
+            row["Genus_common_example"] = ""
+        if "pct_seen" in row and "n_seen" in extra_sum_cols:
+            ns = row.get(value_col)
+            nv = row.get("n_seen")
+            if ns and nv is not None:
+                row["pct_seen"] = 100.0 * float(nv) / float(ns)
+            else:
+                row["pct_seen"] = 0.0
+        parts.append(head)
+        parts.append(pd.DataFrame([row]))
+    return pd.concat(parts, ignore_index=True)
+
+
 def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 900, height: int = 900) -> str:
     """Wrap a Plotly ``pio.to_html(..., div_id=gd_id)`` fragment in a viewport with wheel zoom and left-drag pan.
 
@@ -468,8 +518,10 @@ def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 900, heigh
         "___GDID_JS___", gid_js
     )
     return (
-        f'<div id="{gd_id}-vp" style="width:{width}px;height:{height}px;overflow:hidden;'
-        f'position:relative;cursor:grab">'
+        '<div class="sunburst-panzoom-root" style="width:100%;display:flex;justify-content:center;'
+        'align-items:center;box-sizing:border-box">'
+        f'<div id="{gd_id}-vp" style="width:{width}px;height:{height}px;max-width:100%;overflow:hidden;'
+        f'position:relative;cursor:grab;flex:0 0 auto;box-sizing:border-box">'
         f'<div id="{gd_id}-pz" style="width:100%;height:100%;transform-origin:0 0">'
-        f"{fig_html}</div><script>{js}</script></div>"
+        f"{fig_html}</div><script>{js}</script></div></div>"
     )
