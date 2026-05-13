@@ -863,7 +863,7 @@ def _phylocanvas_js_source(
     height: int,
     tree_type: str,
     *,
-    family_hover: bool = False,
+    family_hover: bool = True,
     drilldown: bool = False,
     subtrees_inline: dict[str, dict] | None = None,
     subtrees_url_base: str | None = None,
@@ -1871,7 +1871,7 @@ def _build_iframe_srcdoc(
     height: int,
     tree_type: str,
     *,
-    family_hover: bool = False,
+    family_hover: bool = True,
     drilldown: bool = False,
     subtrees_inline: dict[str, dict] | None = None,
     subtrees_url_base: str | None = None,
@@ -1920,7 +1920,7 @@ def display_phylocanvas(
     height: int = 700,
     tree_type: str = "circular",
     *,
-    family_hover: bool = False,
+    family_hover: bool = True,
     drilldown: bool = False,
     subtrees_inline: dict[str, dict] | None = None,
     subtrees_url_base: str | None = None,
@@ -1942,9 +1942,11 @@ def display_phylocanvas(
     Parameters
     ----------
     family_hover
-        For family-level trees built with :func:`build_family_tree`, pass
-        ``True`` so a **DOM tooltip** follows the pointer over each coloured leaf,
-        showing order/family (Latin + English), genus count, and species count.
+        When ``True`` (default for family-level trees), Phylocanvas **leaf labels**
+        stay off (clean circular view like matplotlib) and a **DOM tooltip**
+        follows the pointer over each coloured leaf, showing order/family
+        (Latin + English), genus count, and species count. Pass ``False`` to pin
+        every family name on the canvas.
     drilldown
         When ``True``, clicking a family leaf replaces the tree in-place with a
         species-level cladogram for that family. A *Back* button returns to the
@@ -1997,7 +1999,7 @@ def phylocanvas_html(
     height: int = 700,
     tree_type: str = "circular",
     *,
-    family_hover: bool = False,
+    family_hover: bool = True,
     drilldown: bool = False,
     subtrees_inline: dict[str, dict] | None = None,
     subtrees_url_base: str | None = None,
@@ -2028,6 +2030,10 @@ def phylocanvas_html(
         Canvas height in pixels.
     tree_type : str
         One of "circular", "radial", "rectangular", "hierarchical".
+    family_hover : bool
+        When ``True`` (default), leaf labels are hidden on the family tree and
+        names appear in a hover tooltip instead. Pass ``False`` to draw every
+        tip label on the canvas.
     drilldown : bool
         When ``True``, clicking a family leaf replaces the tree with a
         species-level cladogram. Requires *subtrees_url_base* for fetch mode.
