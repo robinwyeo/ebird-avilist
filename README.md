@@ -4,8 +4,8 @@ Jupyter notebooks that explore the global avian checklist **AviList v2025 (11 Ju
 
 ## Layout
 
-- `data/` — AviList spreadsheet, personal life list CSV, `birds_country_table.tsv`, OpenTree cache under `data/phylogeny/`, and notebook caches (`.cache_avilist.pkl.gz`, `.cache_ebird/`, gitignored).
-- `python/` — `birds_nb.py`, `phylo.py`, `ebird_spatial.py` (imported by the notebooks via a short `sys.path` bootstrap).
+- `data/` — AviList spreadsheet, personal life list CSV, `birds_country_table.tsv`, OpenTree cache under `data/phylogeny/`, and notebook caches (`.cache_avilist.pkl.gz`, `.cache_ebird/`, gitignored). Optional **`data/personal_ebird/raw/`** holds My eBird → **Download my data** exports (contents gitignored); **`data/personal_ebird/by_country/`** receives per-country CSVs from `ebird_personal.partition_by_country` (also gitignored).
+- `python/` — `birds_nb.py`, `phylo.py`, `ebird_spatial.py`, `ebird_personal.py`, `birds_life_phylo.py` (life-list tree tinting), `birds_history.py` (personal export EDA / choropleth / PCA) (imported by the notebooks via a short `sys.path` bootstrap).
 - `notebooks/` — `avilist_birds_explore.ipynb`, `RWY_life_list_explore.ipynb`.
 
 For one-off Python from the shell (without the notebook bootstrap), use `PYTHONPATH=python` or `cd python` and adjust imports accordingly.
@@ -15,9 +15,11 @@ For one-off Python from the shell (without the notebook bootstrap), use `PYTHONP
 - `data/AviList-v2025-11Jun-extended.xlsx` — AviList v2025 extended, ~33.7k rows covering every taxonomic rank (order, family, genus, species, subspecies) with authority, range, IUCN status, Cornell/BirdLife/Avibase cross-references, type locality, etc.
 - `data/RWY_ebird_world_life_list.csv` — personal eBird world life list (~1.3k species) with location, state/province, and observation date.
 
+**Full submission history (recommended for “all my checklists by country”):** sign in at [eBird](https://ebird.org/), open **My eBird → Download my data** (see [Download eBird Data](https://support.ebird.org/en/support/solutions/articles/48000838205-download-ebird-data)), save the export under **`data/personal_ebird/raw/`**. The notebook `RWY_life_list_explore.ipynb` section *Personal data by country* loads any `*.csv` / `*.txt` there and writes **`data/personal_ebird/by_country/{CC}/observations.csv`**. If that folder is empty, the same cells use the world life list CSV as a small demo.
+
 ## Setup
 
-**eBird API key (choropleth):** the Geography world map downloads per-country species lists from the [eBird API](https://ebird.org/api/keygen). Create a free key, then export `EBIRD_API_KEY` in the shell before starting Jupyter, or configure the same variable for your IDE / kernel. Lists are cached under `data/.cache_ebird/` (gitignored).
+**eBird API key:** the Geography choropleth and optional checklist / `spplist` helpers use the [eBird API](https://ebird.org/api/keygen). Create a free key, then export `EBIRD_API_KEY` in the shell before starting Jupyter, or configure the same variable for your IDE / kernel. Responses are cached under `data/.cache_ebird/` (gitignored), including `checklists/` when you call `fetch_checklist_view_json`.
 
 Use a local virtualenv (example name `birds_python`):
 

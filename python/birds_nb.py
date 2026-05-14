@@ -417,11 +417,15 @@ def collapse_sunburst_genera_by_family(
     return pd.concat(parts, ignore_index=True)
 
 
-def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 560, height: int = 560) -> str:
+def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 900, height: int = 900) -> str:
     """Wrap a Plotly ``pio.to_html(..., div_id=gd_id)`` fragment in a viewport with wheel zoom and left-drag pan.
 
     Plotly's built-in ``scrollZoom`` / ``dragmode='pan'`` do not apply reliably to sunburst traces; this outer
     transform preserves wedge clicks when the pointer does not move beyond a small drag threshold.
+
+    Interaction: **wheel** zooms toward the cursor, **left-drag** pans, **right-drag** (vertical) rotates the
+    plot about its center (context menu is suppressed on the viewport). **Double-click** resets rotation and
+    re-applies the initial fit (pan/zoom so the full disk is centered in the iframe).
     """
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", gd_id):
         raise ValueError("gd_id must start with a letter and use only letters, digits, hyphen, underscore")
@@ -429,7 +433,7 @@ def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 560, heigh
     js = r"""
 (function(){
   var GDID = ___GDID_JS___;
-  var gd, vp, pz, scale = 1, tx = 0, ty = 0;
+  var gd, vp, pz, rotEl, scale = 1, tx = 0, ty = 0, rotDeg = 0;
   var vpRect = null;
   var rafPending = false;
   function invalidateRect() { vpRect = null; }
@@ -437,26 +441,86 @@ def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 560, heigh
     if (!vpRect) vpRect = vp.getBoundingClientRect();
     return vpRect;
   }
+  /** Show slice labels from wedge *screen* size (area + span proxy); re-run after CSS zoom/pan/rotate. */
+  function updateLabelFit() {
+    if (!pz) return;
+    /* min "legibility score" in px^2-ish units; scales up automatically when the user zooms. */
+    var MIN_SCORE = 220;
+    var slices = pz.querySelectorAll('g.slice');
+    for (var i = 0; i < slices.length; i++) {
+      var g = slices[i];
+      var path = g.querySelector('path');
+      var text = g.querySelector('text');
+      if (!path || !text) continue;
+      var pr = path.getBoundingClientRect();
+      var w = Math.max(0, pr.width), h = Math.max(0, pr.height);
+      var area = w * h;
+      var span = Math.max(w, h);
+      /* Thin annular wedges: small area but long arc — boost score using span. */
+      var score = Math.max(area, span * 16);
+      var txt = (text.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!txt || score < MIN_SCORE) {
+        text.style.visibility = 'hidden';
+        text.style.opacity = '0';
+        text.style.pointerEvents = 'none';
+        continue;
+      }
+      text.style.visibility = 'visible';
+      text.style.opacity = '1';
+      text.style.pointerEvents = 'auto';
+    }
+  }
   function applyNow() {
     rafPending = false;
-    pz.style.transform = 'translate3d(' + Math.round(tx) + 'px,' + Math.round(ty) + 'px,0) scale(' + scale + ')';
-    pz.classList.toggle('sb-hide-labels', scale < 1.3);
+    /* Pan + zoom on outer wrapper; rotate on inner (center origin) so RMB drag spins the disk. */
+    if (rotEl) rotEl.style.transform = 'rotate(' + rotDeg + 'deg)';
+    /* 2D transform only: avoid translateZ/will-change that promote the SVG to a blurry GPU layer. */
+    pz.style.transform = 'translate(' + Math.round(tx) + 'px,' + Math.round(ty) + 'px) scale(' + scale + ')';
+    /* Measure labels after the compositor applies the transform (fixes missing labels on zoom). */
+    requestAnimationFrame(function() {
+      requestAnimationFrame(updateLabelFit);
+    });
   }
   function apply() {
     if (rafPending) return;
     rafPending = true;
     requestAnimationFrame(applyNow);
   }
+  /** Scale + translate so the whole Plotly box fits inside the iframe viewport (first paint + dbl-click). */
+  function applyInitialFit() {
+    invalidateRect();
+    if (!gd || !pz || !vp) return;
+    var gw = gd.offsetWidth, gh = gd.offsetHeight;
+    if (gw < 16 || gh < 16) return;
+    var vr = vp.getBoundingClientRect();
+    var availW = Math.max(160, vr.width - 12);
+    var availH = Math.max(160, vr.height - 12);
+    var pad = 0.9;
+    var s = Math.min(availW / gw, availH / gh) * pad;
+    s = Math.max(0.38, Math.min(0.96, s));
+    scale = s;
+    tx = (availW - s * gw) / 2;
+    ty = (availH - s * gh) / 2;
+    apply();
+  }
   function init() {
     gd = document.getElementById(GDID);
     vp = document.getElementById(GDID + '-vp');
     pz = document.getElementById(GDID + '-pz');
-    if (!gd || !vp || !pz) return;
+    rotEl = document.getElementById(GDID + '-rot');
+    if (!gd || !vp || !pz || !rotEl) return;
     if (vp.dataset.sunburstPanzoomInit) return;
     vp.dataset.sunburstPanzoomInit = '1';
     window.addEventListener('resize', invalidateRect, true);
     window.addEventListener('scroll', invalidateRect, true);
-    var suppress = false, drag = false, sx, sy, stx, sty, moved = false;
+    vp.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+    gd.on('plotly_afterplot', function() {
+      invalidateRect();
+      requestAnimationFrame(function() {
+        requestAnimationFrame(updateLabelFit);
+      });
+    });
+    var suppress = false, drag = false, rdrag = false, sx, sy, stx, sty, rsy, rsr, panMoved = false, rotMoved = false;
     function wheel(e) {
       e.preventDefault();
       var rect = getRect();
@@ -471,35 +535,59 @@ def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 560, heigh
     }
     vp.addEventListener('wheel', wheel, {passive: false, capture: true});
     vp.addEventListener('pointerdown', function(e) {
-      if (e.button !== 0) return;
-      suppress = false;
-      drag = true;
-      moved = false;
-      sx = e.clientX;
-      sy = e.clientY;
-      stx = tx;
-      sty = ty;
-      vp.style.cursor = 'grabbing';
+      if (e.button === 0) {
+        suppress = false;
+        drag = true;
+        panMoved = false;
+        sx = e.clientX;
+        sy = e.clientY;
+        stx = tx;
+        sty = ty;
+        vp.style.cursor = 'grabbing';
+      } else if (e.button === 2) {
+        e.preventDefault();
+        rdrag = true;
+        rotMoved = false;
+        rsy = e.clientY;
+        rsr = rotDeg;
+        vp.style.cursor = 'ns-resize';
+      }
     });
     function pm(e) {
+      if (rdrag) {
+        rotDeg = rsr + (e.clientY - rsy) * 0.35;
+        rotMoved = true;
+        apply();
+        return;
+      }
       if (!drag) return;
       var dx = e.clientX - sx, dy = e.clientY - sy;
-      if ((dx * dx + dy * dy) > 36) moved = true;
-      if (moved) {
+      if ((dx * dx + dy * dy) > 36) panMoved = true;
+      if (panMoved) {
         tx = stx + dx;
         ty = sty + dy;
         apply();
       }
     }
     function pu() {
-      if (!drag) return;
-      drag = false;
-      vp.style.cursor = 'grab';
-      var didPan = moved;
-      moved = false;
-      if (didPan) {
-        suppress = true;
-        setTimeout(function() { suppress = false; }, 0);
+      if (drag) {
+        drag = false;
+        vp.style.cursor = 'grab';
+        var didPan = panMoved;
+        panMoved = false;
+        if (didPan) {
+          suppress = true;
+          setTimeout(function() { suppress = false; }, 0);
+        }
+      }
+      if (rdrag) {
+        rdrag = false;
+        vp.style.cursor = 'grab';
+        if (rotMoved) {
+          suppress = true;
+          setTimeout(function() { suppress = false; }, 0);
+        }
+        rotMoved = false;
       }
     }
     window.addEventListener('pointermove', pm);
@@ -512,15 +600,15 @@ def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 560, heigh
       }
     }, true);
     vp.addEventListener('dblclick', function(e) {
-      scale = 1;
-      tx = 0;
-      ty = 0;
+      rotDeg = 0;
       invalidateRect();
-      apply();
+      applyInitialFit();
       e.preventDefault();
       e.stopPropagation();
     }, true);
-    applyNow();
+    requestAnimationFrame(function() {
+      requestAnimationFrame(applyInitialFit);
+    });
   }
   function wait() {
     var el = document.getElementById(GDID);
@@ -535,18 +623,21 @@ def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 560, heigh
 """.replace(
         "___GDID_JS___", gid_js
     )
-    hide_css = (
-        f"<style>#{gd_id}-pz.sb-hide-labels .slice text{{visibility:hidden;}}</style>"
+    crisp_css = (
+        f"<style>#{gd_id} svg text{{text-rendering:geometricPrecision;shape-rendering:geometricPrecision;}}"
+        f"#{gd_id} .hoverlayer{{overflow:visible!important;}}"
+        f"#{gd_id} .hoverlayer .hovertext text{{font-size:13px!important;line-height:1.45!important;}}"
+        f"#{gd_id} .hoverlayer .hovertext rect{{rx:4;ry:4;shape-rendering:crispEdges;}}</style>"
     )
-    # Square viewport capped by vmin so the full sunburst fits without page scroll on typical viewports.
+    # Viewport height uses 100vh so we have a real vertical budget; applyInitialFit() scales & centers the disk.
     return (
-        '<div class="sunburst-panzoom-root" style="width:100%;display:flex;justify-content:center;'
-        'align-items:center;box-sizing:border-box;padding:6px 0">'
-        f'<div id="{gd_id}-vp" style="width:min({width}px,92vmin);height:min({height}px,92vmin);'
-        f"max-width:100%;aspect-ratio:1;overflow:hidden;position:relative;cursor:grab;"
-        f'flex:0 0 auto;box-sizing:border-box;margin:0 auto">'
-        f"{hide_css}"
-        f'<div id="{gd_id}-pz" style="width:100%;height:100%;transform-origin:0 0;'
-        f"will-change:transform;backface-visibility:hidden\">"
-        f"{fig_html}</div><script>{js}</script></div></div>"
+        '<div class="sunburst-panzoom-root" style="width:100%;min-height:100vh;display:flex;flex-direction:column;'
+        'align-items:center;justify-content:flex-start;box-sizing:border-box;padding:6px 0 32px 0">'
+        f'<div id="{gd_id}-vp" style="width:100%;max-width:{width}px;height:calc(100vh - 48px);min-height:320px;'
+        f"display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:visible;"
+        f"position:relative;cursor:grab;box-sizing:border-box;margin:0 auto\">"
+        f"{crisp_css}"
+        f'<div id="{gd_id}-pz" style="width:100%;height:auto;display:block;transform-origin:0 0">'
+        f'<div id="{gd_id}-rot" style="width:100%;display:block;transform-origin:50% 50%;transform:rotate(0deg)">'
+        f"{fig_html}</div></div><script>{js}</script></div></div>"
     )

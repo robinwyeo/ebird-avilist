@@ -1,0 +1,4 @@
+# Drop My eBird → Download my data exports here (tab- or comma-separated).
+# Filenames are ignored; keep this folder for a stable path in notebooks.
+*
+!.gitignore
