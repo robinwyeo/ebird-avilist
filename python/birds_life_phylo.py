@@ -1,7 +1,9 @@
-"""Tint Phylocanvas metadata for life-list completion (family tree + species subtrees)."""
+"""Phylocanvas metadata helpers: family-tree completion ring + species seen/unseen."""
 from __future__ import annotations
 
 from typing import Any
+
+from phylo import order_tip_color_map
 
 
 def _parse_hex_color(s: str) -> tuple[int, int, int]:
@@ -35,23 +37,37 @@ def tint_family_meta_by_completion(
     seen_by_family: dict[str, int],
     total_by_family: dict[str, int],
     *,
-    alpha_min: float = 0.18,
-    alpha_max: float = 1.0,
+    df_species: Any | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Clone *meta* and set tip colour alpha from % species seen in that family.
+    """Clone *meta* for Phylocanvas family tips: order hue ring + grayscale inner fill.
 
-    Keeps the base hue from each entry's ``color`` (order palette) and scales
-    opacity from *alpha_min* (0% seen) to *alpha_max* (100% seen).
+    Each tip's ``color`` is the order ring (hex), drawn as the leaf shape border
+    when ``showShapeBorders`` is on in the Phylocanvas embed. ``inner_fill`` is
+    ``[r,r,r,255]`` with *r* from 255 (0% species seen) down to 0 (100% seen).
+
+    Pass *df_species* (full AviList species table) so ring colours match
+    ``build_family_tree`` / ``avilist_birds_explore`` exactly; omit it to keep
+    each tip's existing ``color`` field (also hex from cached meta).
     """
+    ord_palette: dict[str, str] | None = None
+    if df_species is not None:
+        ord_palette = order_tip_color_map(df_species)
+
     out: dict[str, dict[str, Any]] = {}
     for fam, row in meta.items():
         m = dict(row)
         pct = float(pct_by_family.get(fam, 0.0) or 0.0)
         pct = max(0.0, min(100.0, pct))
-        t = pct / 100.0
-        alpha = alpha_min + (alpha_max - alpha_min) * t
         base = str(m.get("color", "#aaaaaa"))
-        m["color"] = _color_with_alpha(base, alpha)
+        order = str(m.get("order", "") or "").strip()
+        if ord_palette and order:
+            base = ord_palette.get(order, base)
+        # Hex only — Phylocanvas strokeColour matches the avilist family tree;
+        # rgba() strings can fail to parse when paired with inner_fill arrays.
+        m["color"] = base
+        g = int(round(255.0 * (1.0 - pct / 100.0)))
+        g = max(0, min(255, g))
+        m["inner_fill"] = [g, g, g, 255]
         s = int(seen_by_family.get(fam, 0) or 0)
         tot = int(total_by_family.get(fam, 0) or 0)
         tip = str(m.get("tooltip", "") or "").rstrip()

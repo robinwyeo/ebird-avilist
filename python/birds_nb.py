@@ -336,15 +336,35 @@ def load_avilist(xlsx: Path, cache: Path) -> pd.DataFrame:
     return df
 
 
+ENGLISH_NAME_PRIORITY: tuple[str, ...] = (
+    "English_name_AviList",
+    "English_name_Clements_v2024",
+    "English_name_BirdLife_v9",
+)
+
+
+def coalesce_species_english(df: pd.DataFrame) -> pd.Series:
+    """First non-null English name among AviList / Clements / BirdLife columns present in *df*."""
+    cols = [c for c in ENGLISH_NAME_PRIORITY if c in df.columns]
+    if not cols:
+        return pd.Series(pd.NA, index=df.index, dtype=object)
+    s = df[cols[0]]
+    for c in cols[1:]:
+        s = s.fillna(df[c])
+    return s
+
+
 def add_genus_common_example(df: pd.DataFrame) -> pd.DataFrame:
+    d = df.copy()
+    d["_english_for_genus"] = coalesce_species_english(d)
     g = (
-        df.sort_values("Scientific_name", kind="stable")
-        .groupby("Genus", dropna=False)["English_name_AviList"]
+        d.sort_values("Scientific_name", kind="stable")
+        .groupby("Genus", dropna=False)["_english_for_genus"]
         .agg(lambda ser: next((str(v).strip() for v in ser if pd.notna(v) and str(v).strip()), ""))
         .rename("Genus_common_example")
         .reset_index()
     )
-    return df.merge(g, on="Genus", how="left")
+    return d.drop(columns=["_english_for_genus"]).merge(g, on="Genus", how="left")
 
 
 def describer_name(val: object) -> str:
@@ -493,9 +513,9 @@ def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 900, heigh
     var gw = gd.offsetWidth, gh = gd.offsetHeight;
     if (gw < 16 || gh < 16) return;
     var vr = vp.getBoundingClientRect();
-    var availW = Math.max(160, vr.width - 12);
-    var availH = Math.max(160, vr.height - 12);
-    var pad = 0.9;
+    var availW = Math.max(160, vr.width - 6);
+    var availH = Math.max(160, vr.height - 6);
+    var pad = 0.93;
     var s = Math.min(availW / gw, availH / gh) * pad;
     s = Math.max(0.38, Math.min(0.96, s));
     scale = s;
@@ -629,11 +649,12 @@ def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 900, heigh
         f"#{gd_id} .hoverlayer .hovertext text{{font-size:13px!important;line-height:1.45!important;}}"
         f"#{gd_id} .hoverlayer .hovertext rect{{rx:4;ry:4;shape-rendering:crispEdges;}}</style>"
     )
-    # Viewport height uses 100vh so we have a real vertical budget; applyInitialFit() scales & centers the disk.
+    # Fixed viewport height matches the Plotly box (~900px) so the iframe is not padded with tall 100vh bands;
+    # applyInitialFit() still scales slightly for inner padding. Extra root padding leaves room for hovers.
     return (
-        '<div class="sunburst-panzoom-root" style="width:100%;min-height:100vh;display:flex;flex-direction:column;'
-        'align-items:center;justify-content:flex-start;box-sizing:border-box;padding:6px 0 32px 0">'
-        f'<div id="{gd_id}-vp" style="width:100%;max-width:{width}px;height:calc(100vh - 48px);min-height:320px;'
+        '<div class="sunburst-panzoom-root" style="width:100%;display:flex;flex-direction:column;'
+        'align-items:center;justify-content:flex-start;box-sizing:border-box;padding:2px 0 6px 0">'
+        f'<div id="{gd_id}-vp" style="width:100%;max-width:{width}px;height:{height}px;min-height:240px;'
         f"display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:visible;"
         f"position:relative;cursor:grab;box-sizing:border-box;margin:0 auto\">"
         f"{crisp_css}"

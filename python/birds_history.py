@@ -167,14 +167,14 @@ def personal_choropleth_html(
             return np.zeros(len(all_iso3), dtype=float)
         return pmat.loc[family].reindex(all_iso3, fill_value=0).values.astype(float)
 
+    def _label(fam: str) -> str:
+        return family_label(fam, family_english.get(fam, ""))
+
     family_avail_by_label: dict[str, list[int]] = {}
     for fam in sorted(country_mat.index):
         family_avail_by_label[_label(fam)] = (
             country_mat.loc[fam].reindex(all_iso3, fill_value=0).astype(int).tolist()
         )
-
-    def _label(fam: str) -> str:
-        return family_label(fam, family_english.get(fam, ""))
 
     labels_to_z: dict[str, list[int]] = {
         "All families": personal_totals.astype(int).tolist(),
@@ -610,9 +610,6 @@ def country_pca(
 
     *_df_species* reserved for future enrichment (e.g. trait-based features).
     """
-    from sklearn.decomposition import PCA
-    from sklearn.preprocessing import StandardScaler
-
     sci_c = _sci_col(hist)
     work = hist.dropna(subset=["country_iso2"]).copy()
     work["_bio"] = work[sci_c].map(_norm_binomial)
@@ -630,16 +627,25 @@ def country_pca(
         return empty, empty
 
     X = wide.values.astype(float)
-    scaler = StandardScaler(with_mean=True, with_std=True)
-    Xs = scaler.fit_transform(X)
-    pca = PCA(n_components=min(n_components, Xs.shape[0], Xs.shape[1]))
-    Z = pca.fit_transform(Xs)
-    evr = pca.explained_variance_ratio_
+    # Per-column standardisation (same as sklearn StandardScaler with defaults).
+    col_mean = X.mean(axis=0)
+    col_std = X.std(axis=0, ddof=0)
+    col_std = np.where(col_std > 0, col_std, 1.0)
+    Xs = (X - col_mean) / col_std
+
+    n_samples, n_features = Xs.shape
+    n_comp = min(n_components, n_samples, n_features)
+    row_mean = Xs.mean(axis=0)
+    Xc = Xs - row_mean
+    _u, sing_vals, vt = np.linalg.svd(Xc, full_matrices=False)
+    components = vt[:n_comp, :]  # (n_comp, n_features), sklearn-style
+    Z = Xc @ components.T
+    evr = (sing_vals[:n_comp] ** 2) / np.sum(sing_vals**2)
 
     conti = [_ISO2_CONTINENT.get(cc, "Other") for cc in wide.index]
 
     hover_lines = []
-    load = pca.components_.T  # shape (n_features, n_comp)
+    load = components.T  # shape (n_features, n_comp)
     species = list(wide.columns)
     for i, cc in enumerate(wide.index):
         vec = X[i]

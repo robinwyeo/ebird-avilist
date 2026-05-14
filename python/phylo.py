@@ -350,6 +350,17 @@ def _palette_for_groups(groups: list[str]) -> dict[str, str]:
     return {g: _PALETTE[i % len(_PALETTE)] for i, g in enumerate(groups)}
 
 
+def order_tip_color_map(df_species) -> dict[str, str]:
+    """Map each bird *Order* to the hex colour used for family-tree tip rings.
+
+    Uses the same first-seen order sequence and :data:`_PALETTE` assignment as
+    :func:`build_family_tree` / ``_family_meta_from_avilist`` so notebooks can
+    re-apply ring colours after mutating tip metadata (e.g. life-list shading).
+    """
+    orders = list(dict.fromkeys(df_species["Order"].dropna()))
+    return _palette_for_groups(orders)
+
+
 # ---------------------------------------------------------------------------
 # Public: tree builders
 # ---------------------------------------------------------------------------
@@ -951,15 +962,25 @@ def _phylocanvas_js_source(
   var _lastAppliedFamilyTip = "";
   var _famNavHistory = [];
 
+  function _metaUsesCompletionRing(meta) {{
+    for (var k in meta) {{
+      if (meta[k] && meta[k].inner_fill) return true;
+    }}
+    return false;
+  }}
+
   function buildStyles(meta) {{
     var s = {{}};
     Object.keys(meta).forEach(function (tip) {{
       var m = meta[tip];
+      var ring = m.color || "#aaaaaa";
+      var fill = (m.inner_fill && m.inner_fill.length >= 3) ? m.inner_fill : ring;
+      var stroke = m.inner_fill ? ring : ring;
       var style = {{
-        fillColour:   m.color || "#aaaaaa",
-        strokeColour: m.color || "#aaaaaa",
+        fillColour:   fill,
+        strokeColour: stroke,
         shape: "circle",
-        size:  5,
+        size:  m.inner_fill ? 6 : 5,
         label: (m.label !== undefined && m.label !== null && m.label !== "") ? m.label : tip,
       }};
       s[tip] = style;
@@ -1592,7 +1613,8 @@ def _phylocanvas_js_source(
 
   // ── Core tree factory ───────────────────────────────────────────────────────
   function _makeTree(newick, meta, treeType, showLeafLabels) {{
-    return new window.phylocanvas.PhylocanvasGL(_container, {{
+    var ringInner = _metaUsesCompletionRing(meta);
+    var props = {{
       size:               {{ width: containerWidth(_sizeTargetEl()), height: HEIGHT }},
       source:             newick,
       type:               window.phylocanvas.TreeTypes[treeType],
@@ -1606,7 +1628,13 @@ def _phylocanvas_js_source(
       showBranchLengths:  false,
       interactive:        true,
       styles:             buildStyles(meta),
-    }});
+    }};
+    if (ringInner) {{
+      props.showShapeBorders = true;
+      props.shapeBorderWidth = 3;
+      props.shapeBorderAlpha = 1;
+    }}
+    return new window.phylocanvas.PhylocanvasGL(_container, props);
   }}
 
   // ── Drilldown: enter a family's species tree ────────────────────────────────
