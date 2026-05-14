@@ -430,8 +430,22 @@ def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 560, heigh
 (function(){
   var GDID = ___GDID_JS___;
   var gd, vp, pz, scale = 1, tx = 0, ty = 0;
+  var vpRect = null;
+  var rafPending = false;
+  function invalidateRect() { vpRect = null; }
+  function getRect() {
+    if (!vpRect) vpRect = vp.getBoundingClientRect();
+    return vpRect;
+  }
+  function applyNow() {
+    rafPending = false;
+    pz.style.transform = 'translate3d(' + Math.round(tx) + 'px,' + Math.round(ty) + 'px,0) scale(' + scale + ')';
+    pz.classList.toggle('sb-hide-labels', scale < 1.3);
+  }
   function apply() {
-    pz.style.transform = 'translate(' + Math.round(tx) + 'px,' + Math.round(ty) + 'px) scale(' + scale + ')';
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(applyNow);
   }
   function init() {
     gd = document.getElementById(GDID);
@@ -440,10 +454,12 @@ def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 560, heigh
     if (!gd || !vp || !pz) return;
     if (vp.dataset.sunburstPanzoomInit) return;
     vp.dataset.sunburstPanzoomInit = '1';
+    window.addEventListener('resize', invalidateRect, true);
+    window.addEventListener('scroll', invalidateRect, true);
     var suppress = false, drag = false, sx, sy, stx, sty, moved = false;
     function wheel(e) {
       e.preventDefault();
-      var rect = vp.getBoundingClientRect();
+      var rect = getRect();
       var mx = e.clientX - rect.left, my = e.clientY - rect.top;
       var f = (e.deltaY > 0) ? 0.92 : 1.08;
       var ns = Math.max(0.2, Math.min(5, scale * f));
@@ -499,10 +515,12 @@ def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 560, heigh
       scale = 1;
       tx = 0;
       ty = 0;
+      invalidateRect();
       apply();
       e.preventDefault();
       e.stopPropagation();
     }, true);
+    applyNow();
   }
   function wait() {
     var el = document.getElementById(GDID);
@@ -517,6 +535,9 @@ def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 560, heigh
 """.replace(
         "___GDID_JS___", gid_js
     )
+    hide_css = (
+        f"<style>#{gd_id}-pz.sb-hide-labels .slice text{{visibility:hidden;}}</style>"
+    )
     # Square viewport capped by vmin so the full sunburst fits without page scroll on typical viewports.
     return (
         '<div class="sunburst-panzoom-root" style="width:100%;display:flex;justify-content:center;'
@@ -524,6 +545,8 @@ def sunburst_panzoom_viewport(fig_html: str, gd_id: str, width: int = 560, heigh
         f'<div id="{gd_id}-vp" style="width:min({width}px,92vmin);height:min({height}px,92vmin);'
         f"max-width:100%;aspect-ratio:1;overflow:hidden;position:relative;cursor:grab;"
         f'flex:0 0 auto;box-sizing:border-box;margin:0 auto">'
-        f'<div id="{gd_id}-pz" style="width:100%;height:100%;transform-origin:0 0">'
+        f"{hide_css}"
+        f'<div id="{gd_id}-pz" style="width:100%;height:100%;transform-origin:0 0;'
+        f"will-change:transform;backface-visibility:hidden\">"
         f"{fig_html}</div><script>{js}</script></div></div>"
     )
